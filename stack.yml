@@ -28,7 +28,16 @@ services:
       restart_policy:
         condition: on-failure
       labels:
-        - traefik.enable=false
+        - traefik.enable=true
+        - traefik.swarm.network=waurumai_net
+        - traefik.http.routers.pixel-agents.rule=Host(`ag.waurumai.com`)
+        - traefik.http.routers.pixel-agents.entrypoints=websecure
+        - traefik.http.routers.pixel-agents.tls=true
+        - traefik.http.routers.pixel-agents.tls.certresolver=letsencryptresolver
+        - traefik.http.routers.pixel-agents.service=pixel-agents
+        - traefik.http.services.pixel-agents.loadbalancer.server.port=3100
+        - traefik.http.routers.pixel-agents.middlewares=pixel-agents-auth
+        - traefik.http.middlewares.pixel-agents-auth.basicauth.users=${PIXEL_AUTH_USERS}
 
 volumes:
   pixel_agents_data:
