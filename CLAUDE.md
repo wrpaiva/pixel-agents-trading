@@ -4,26 +4,35 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this repo is
 
-A deployment wrapper around the upstream `pixel-agents` npm package (it is not a fork — there is no app source here), plus a custom "trading room" office layout for it. There's no build system, no tests and no linter. The parts are:
+Pixel Agents 1.5.0 with a "Trading Room": seven native characters driven by the OpenClaw event receiver. Details are in `docs/architecture.md`, `docs/event-contract.md` and `docs/deployment.md`.
 
-- `Dockerfile`: installs `pixel-agents` globally on `node:22-bookworm-slim` and runs `pixel-agents --host 0.0.0.0 --port 3100 --no-terminal` as user `node`.
-- `.github/workflows/docker-publish.yml`: builds and pushes `ghcr.io/wrpaiva/pixel-agents-trading:1.0.0` on `v*` tags or a manual dispatch. **The tag is hardcoded to `1.0.0`**, so every publish overwrites that tag. `stack.yml` pins the same tag.
-- `stack.yml`: a Docker Swarm stack (service `web`, deployed as stack `pixel-agents`, so the service is named `pixel-agents_web`). It is pinned to node `waurumai` on the external network `waurumai_net`. Traefik serves it at `ag.waurumai.com` over TLS (letsencrypt), with basic auth from the `PIXEL_AUTH_USERS` env var, which must be set when you deploy. App data lives in the volume `pixel_agents_data` mounted at `/home/node/.pixel-agents`.
+- `vendor/pixel-agents/`: git subtree of the upstream with exactly three patches (marked `pixel-agents-trading patch`): `server/src/activityReplayers.ts` (new), the `replayExtraActivity` call in `clientMessageHandler.ts`, and the `registerTradingProvider` block in `cli.ts`. After a `git subtree pull`, re-check all three.
+- `src/trading/`: the Trading Room (`config`, `domain`, `application`, `infrastructure`, `providers`, `bootstrap`). It is bundled by the upstream's own esbuild (`cli.ts` imports it), so there is no separate build. If setup fails it logs `[trading] Trading Room desativada: ...` and the server keeps running.
+- `Dockerfile`: builds the upstream from `vendor/` (with `src/`), installs the packed tarball globally and runs `pixel-agents --host 0.0.0.0 --port 3100 --no-terminal` as user `node`. `scripts/smoke-ws.mjs` is copied to `/opt/trading/`.
+- `.github/workflows/`: `test.yml` (typecheck, vitest, upstream server tests, Playwright e2e) and `docker-publish.yml`. **The image tag comes from the git tag**: `v2.0.0` publishes `2.0.0`. `1.0.0` is never rewritten; it is the rollback.
+- `stack.yml`: Swarm stack (`pixel-agents`, service `pixel-agents_web`) on node `waurumai`, networks `waurumai_net` and `trading_internal`, secret `pixel_events_token`, Traefik at `ag.waurumai.com` with basic auth from `PIXEL_AUTH_USERS`. Image tag is `PIXEL_AGENTS_TAG` (default `2.0.0`). Data lives in the volume `pixel_agents_data` at `/home/node/.pixel-agents`. `stack.canary.yml` validates a new image without Traefik or ports.
 - `trading-room/`: office layout JSON files in the pixel-agents layout format.
 
 ## Commands
 
 ```bash
-# Regenerate trading-room/layout.json (furniture + areas); prints TRADING_ROOM_ATUALIZADA on success
-./criar-trading-room.sh
+npm test                  # vitest (unit + integration)
+npm run typecheck
+npm run build:vendor      # needed before e2e
+npm run e2e               # Playwright
+npx vitest run tests/unit/AgentStateMapper.test.ts -t "model_end"   # single test
 
-# Build the image locally / run it
 docker build -t pixel-agents-trading .
 docker run --rm -p 3100:3100 pixel-agents-trading
+
+# Regenerate trading-room/layout.json (furniture + areas); prints TRADING_ROOM_ATUALIZADA on success
+./criar-trading-room.sh   # NOT to be run in Etapa 3
 
 # Deploy to the swarm (on the manager)
 PIXEL_AUTH_USERS='user:$$apr1$$...' docker stack deploy -c stack.yml pixel-agents
 ```
+
+Do not run `criar-trading-room.sh` in Etapa 3: the production layout lives in the `pixel_agents_data` volume and must be preserved.
 
 ## Layout generation (`criar-trading-room.sh`)
 

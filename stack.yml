@@ -2,17 +2,31 @@ version: "3.8"
 
 services:
   web:
-    image: ghcr.io/wrpaiva/pixel-agents-trading:1.0.0
+    # Rollback: PIXEL_AGENTS_TAG=1.0.0 (ou o digest anotado em docs/deployment.md).
+    image: ghcr.io/wrpaiva/pixel-agents-trading:${PIXEL_AGENTS_TAG:-2.0.0}
 
     environment:
       NODE_ENV: production
       HOME: /home/node
+      PIXEL_EVENTS_RECEIVER_URL: http://pixel-events_receiver:3188
+      PIXEL_EVENTS_TOKEN_FILE: /run/secrets/pixel_events_token
+
+    secrets:
+      - pixel_events_token
 
     networks:
       - waurumai_net
+      - trading_internal
 
     volumes:
       - pixel_agents_data:/home/node/.pixel-agents
+
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3100/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
 
     deploy:
       replicas: 1
@@ -27,6 +41,12 @@ services:
           memory: 256M
       restart_policy:
         condition: on-failure
+      update_config:
+        order: stop-first
+        failure_action: rollback
+        monitor: 60s
+      rollback_config:
+        order: stop-first
       labels:
         - traefik.enable=true
         - traefik.swarm.network=waurumai_net
@@ -39,9 +59,15 @@ services:
         - traefik.http.routers.pixel-agents.middlewares=pixel-agents-auth
         - traefik.http.middlewares.pixel-agents-auth.basicauth.users=${PIXEL_AUTH_USERS}
 
+secrets:
+  pixel_events_token:
+    external: true
+
 volumes:
   pixel_agents_data:
 
 networks:
   waurumai_net:
+    external: true
+  trading_internal:
     external: true

@@ -1,0 +1,40 @@
+version: "3.8"
+
+# Validação da 2.0.0 contra o receptor real ANTES de trocar a produção.
+# Sem Traefik e sem porta: acesso só via `docker exec ... smoke-ws.mjs`.
+services:
+  web:
+    image: ghcr.io/wrpaiva/pixel-agents-trading:2.0.0
+    environment:
+      NODE_ENV: production
+      HOME: /home/node
+      PIXEL_EVENTS_RECEIVER_URL: http://pixel-events_receiver:3188
+      PIXEL_EVENTS_TOKEN_FILE: /run/secrets/pixel_events_token
+    secrets:
+      - pixel_events_token
+    networks:
+      - trading_internal
+    volumes:
+      - pixel_agents_canary_data:/home/node/.pixel-agents
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.hostname == waurumai
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+      restart_policy:
+        condition: none
+
+secrets:
+  pixel_events_token:
+    external: true
+
+volumes:
+  pixel_agents_canary_data:
+
+networks:
+  trading_internal:
+    external: true
