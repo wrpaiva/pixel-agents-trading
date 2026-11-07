@@ -8,6 +8,7 @@
  * Each connecting WebSocket client receives the full state on webviewReady.
  */
 
+import * as os from 'os';
 import * as path from 'path';
 
 import { AgentRuntime } from './agentRuntime.js';
@@ -36,6 +37,9 @@ import { claudeProvider, copyHookScript, hookProviderById } from './providers/in
 import { PixelAgentsServer } from './server.js';
 import { PtySessionManager } from './terminal/ptySessionManager.js';
 import { isLoopbackHost, normalizeHostname } from './wsAuth.js';
+// pixel-agents-trading patch: OpenClaw Trading Room (src/trading).
+import { registerTradingProvider } from '../../../../src/trading/bootstrap/registerTradingProvider.js';
+import { addActivityReplayer } from './activityReplayers.js';
 
 // ── Argument parsing ──────────────────────────────────────────
 
@@ -251,6 +255,14 @@ async function main(): Promise<void> {
       runtime.handleHookEvent(providerId, event);
     });
 
+    // pixel-agents-trading patch: the seven OpenClaw agents, registered before any
+    // client connects so restoreExternalAgents never re-creates them from disk.
+    const tradingRoom = registerTradingProvider({
+      store,
+      addReplayer: addActivityReplayer,
+      dataDir: path.join(os.homedir(), '.pixel-agents'),
+    });
+
     // onSetHooksEnabled side effect: install/uninstall the named provider's
     // hooks when the user toggles in the UI (or answers the consent ask).
     // Captures config from the outer scope after server.start().
@@ -427,6 +439,7 @@ async function main(): Promise<void> {
       // wait for them: exiting now would cancel the SIGKILL escalation and
       // leave a child that ignores SIGHUP orphaned on a dead server.
       await ptyManager.disposeAll();
+      await tradingRoom.stop();
       runtime.dispose();
       server.stop();
       process.exit(0);
