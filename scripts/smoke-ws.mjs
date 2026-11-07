@@ -1,7 +1,8 @@
 // Verificação somente leitura do escritório, para rodar DENTRO do container:
 //   node /opt/trading/smoke-ws.mjs [ws://127.0.0.1:3100/ws] [segundos]
 // Conecta como o navegador (sem token, portanto read-only), lista os personagens
-// e imprime as mudanças de atividade até o prazo. Sai com 1 se faltar algum dos 7.
+// e imprime as mudanças de atividade até o prazo. Sai com 1 se faltar algum dos 7 ou
+// se houver qualquer outro agente (ex.: um `main`).
 const url = process.argv[2] ?? 'ws://127.0.0.1:3100/ws';
 const seconds = Number(process.argv[3] ?? 5);
 const EXPECTED = [9001, 9002, 9003, 9004, 9005, 9006, 9007];
@@ -36,6 +37,11 @@ setTimeout(() => {
     console.error('FALTANDO:', missing.join(', '));
     process.exit(1);
   }
-  console.log('OK: 7 agentes presentes');
+  const unexpected = agents.filter((id) => !EXPECTED.includes(id));
+  if (unexpected.length || agents.length > EXPECTED.length) {
+    console.error('INESPERADOS:', unexpected.join(', ') || `${agents.length} agentes`);
+    process.exit(1);
+  }
+  console.log('OK: exatamente os 7 agentes esperados');
   process.exit(0);
 }, seconds * 1000);

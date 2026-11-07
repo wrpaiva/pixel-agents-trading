@@ -78,7 +78,8 @@ CID=$(docker ps -q -f label=com.docker.swarm.service.name=pixel-agents_web | hea
 docker exec "$CID" sha256sum /home/node/.pixel-agents/layout.json   # igual ao anotado
 docker exec "$CID" node /opt/trading/smoke-ws.mjs ws://127.0.0.1:3100/ws 5
 curl -s -o /dev/null -w '%{http_code}\n' https://ag.waurumai.com/          # 401 sem credenciais
-curl -s -o /dev/null -w '%{http_code}\n' http://pixel-events_receiver:3188/agents 2>/dev/null || echo "receptor inacessível de fora (esperado)"
+docker service inspect pixel-events_receiver --format '{{json .Endpoint.Ports}}'   # esperado: null ou []
+docker service inspect pixel-events_receiver --format '{{json .Spec.Labels}}'       # não pode conter traefik.enable=true
 ```
 
 ## 4. Validação
@@ -103,7 +104,17 @@ CID=$(docker ps -q -f label=com.docker.swarm.service.name=pixel-agents_web | hea
 docker exec "$CID" sha256sum /home/node/.pixel-agents/layout.json   # igual ao anotado
 ```
 
-O escritório antigo deve abrir. O healthcheck do `stack.yml` usa `/api/health`, que a 1.0.0 (`pixel-agents` 1.5.0 do npm) expõe; confirme isso no teste de rollback, pois um healthcheck falho faz o Swarm reverter a atualização (`failure_action: rollback`). Para voltar, remova `PIXEL_AGENTS_TAG` (2.0.0) e confirme `1/1` de novo. Registre o resultado e a data no topo deste arquivo e faça commit.
+**Limpeza obrigatória.** A 2.0.0 persiste os agentes 9001–9007 em `~/.pixel-agents/standalone-state.json` e cria marcadores em `~/.pixel-agents/openclaw/*.jsonl`, ambos no volume compartilhado. A 1.0.0 (upstream puro) restaura todo agente externo persistido cujo jsonl exista, então sem limpeza o escritório "antigo" mostraria 7 personagens ociosos permanentes. Com a 1.0.0 em `1/1`:
+
+```bash
+CID=$(docker ps -q -f label=com.docker.swarm.service.name=pixel-agents_web | head -n1)
+docker exec "$CID" rm -rf /home/node/.pixel-agents/openclaw
+docker service update --force pixel-agents_web
+```
+
+O upstream ignora agentes cujo arquivo sumiu e regrava o estado sem eles. Recarregue a página e confirme que nenhum personagem do OpenClaw permanece. Ao voltar para a 2.0.0, os marcadores são recriados automaticamente.
+
+Só então o escritório antigo está de volta. O healthcheck do `stack.yml` usa `/api/health`, que a 1.0.0 (`pixel-agents` 1.5.0 do npm) expõe; confirme isso no teste de rollback, pois um healthcheck falho faz o Swarm reverter a atualização (`failure_action: rollback`). Para voltar, remova `PIXEL_AGENTS_TAG` (2.0.0) e confirme `1/1` de novo. Registre o resultado e a data no topo deste arquivo e faça commit.
 
 ## Definição de pronto
 

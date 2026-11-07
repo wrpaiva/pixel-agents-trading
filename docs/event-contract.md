@@ -42,7 +42,9 @@ Estado atual dos sete agentes (exemplo com um deles):
 ## `GET /events` (SSE)
 
 - No início de cada conexão: `event: snapshot`, com o mesmo conteúdo de `GET /agents`.
-- Depois, um `event: activity` por evento, com `data` JSON `{agentId,state,type,sessionKey,toolName,timestamp,receivedAt,seq}`.
+- Depois, um `event: activity` por evento, com `data` JSON `{agentId,state,type,sessionKey,toolName,timestamp,receivedAt,seq}`. `receivedAt` é um número: epoch em milissegundos (não uma string ISO); `timestamp` é ISO 8601.
+
+Uma chamada de modelo ou ferramenta que dure mais que `PIXEL_EVENTS_STALE_ACTIVE_MS` (padrão 180 s) sem eventos aparece como `idle` até o próximo evento.
 - `: ping` a cada 25 s (comentário SSE, só mantém a conexão viva).
 
 ```text
@@ -50,7 +52,7 @@ event: snapshot
 data: {"agents":[...]}
 
 event: activity
-data: {"agentId":"crypto-btc","state":"ferramenta","type":"tool_start","sessionKey":"agent:crypto-btc:main","toolName":"web_search","timestamp":"2026-11-07T12:00:00.000Z","receivedAt":"2026-11-07T12:00:00.020Z","seq":42}
+data: {"agentId":"crypto-btc","state":"ferramenta","type":"tool_start","sessionKey":"agent:crypto-btc:main","toolName":"web_search","timestamp":"2026-11-07T12:00:00.000Z","receivedAt":1794139200020,"seq":42}
 
 : ping
 ```

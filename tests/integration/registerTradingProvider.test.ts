@@ -64,7 +64,7 @@ describe('registerTradingProvider', () => {
     expect(store.size).toBe(7);
   });
 
-  it('receptor fora do ar além do limite: todos "Sem conexão"; volta ao reconectar', async () => {
+  it('receptor fora do ar além do limite: todos "Sem conexão"', async () => {
     fake = await startFakeReceiver({ token: TOKEN });
     const url = fake.url;
     handle = registerTradingProvider({ store, addReplayer: addActivityReplayer, dataDir: dir, env: env(url), logger });
@@ -74,7 +74,7 @@ describe('registerTradingProvider', () => {
     await waitFor(() => statusOf(9001) === 'Sem conexão com o receptor');
   });
 
-  it('sem token: personagens aparecem desconectados e nada é requisitado', () => {
+  it('sem token: personagens aparecem desconectados e o token não vaza nos logs', () => {
     handle = registerTradingProvider({
       store,
       addReplayer: addActivityReplayer,
