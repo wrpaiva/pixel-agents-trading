@@ -1,0 +1,11 @@
+{
+  "agents": [
+    { "agentId": "trading-coordinator", "state": "ocioso", "lastEvent": null, "lastSeen": null, "sessionKey": null, "toolName": null, "count": 0 },
+    { "agentId": "crypto-btc", "state": "ocioso", "lastEvent": "model_end", "lastSeen": "2026-11-04T01:53:15.504Z", "sessionKey": "agent:crypto-btc:main", "toolName": null, "count": 6 },
+    { "agentId": "crypto-eth", "state": "ocioso", "lastEvent": null, "lastSeen": null, "sessionKey": null, "toolName": null, "count": 0 },
+    { "agentId": "forex-eur", "state": "ocioso", "lastEvent": null, "lastSeen": null, "sessionKey": null, "toolName": null, "count": 0 },
+    { "agentId": "forex-gbp", "state": "ocioso", "lastEvent": null, "lastSeen": null, "sessionKey": null, "toolName": null, "count": 0 },
+    { "agentId": "gold-analyst", "state": "ocioso", "lastEvent": null, "lastSeen": null, "sessionKey": null, "toolName": null, "count": 0 },
+    { "agentId": "risk-reviewer", "state": "ocioso", "lastEvent": null, "lastSeen": null, "sessionKey": null, "toolName": null, "count": 0 }
+  ]
+}
