@@ -31,8 +31,26 @@ const numberFrom = (value: string | undefined, fallback: number): number => {
  * o que o escritório mostra; nunca interrompem o servidor nem tocam no OpenClaw.
  */
 export function registerTradingProvider(options: RegisterTradingProviderOptions): TradingRoomHandle {
-  const env = options.env ?? process.env;
   const logger = options.logger ?? consoleLogger;
+  const cleanups: Array<() => void | Promise<void>> = [];
+  try {
+    return compose(options, logger, cleanups);
+  } catch (err) {
+    // Observabilidade nunca derruba o servidor: desfaz o que já subiu e devolve um handle inerte.
+    logger.warn(`[trading] Trading Room desativada: ${err instanceof Error ? err.message : String(err)}`);
+    for (const undo of cleanups.reverse()) {
+      try {
+        void Promise.resolve(undo()).catch(() => {});
+      } catch {
+        // melhor esforço
+      }
+    }
+    return { stop: async () => {} };
+  }
+}
+
+function compose(options: RegisterTradingProviderOptions, logger: Logger, cleanups: Array<() => void | Promise<void>>): TradingRoomHandle {
+  const env = options.env ?? process.env;
   const baseUrl = env.PIXEL_EVENTS_RECEIVER_URL ?? 'http://pixel-events_receiver:3188';
   const tokenFile = env.PIXEL_EVENTS_TOKEN_FILE ?? '/run/secrets/pixel_events_token';
   const disconnectAfterMs = numberFrom(env.PIXEL_EVENTS_DISCONNECT_AFTER_MS, 30_000);
@@ -51,6 +69,7 @@ export function registerTradingProvider(options: RegisterTradingProviderOptions)
     markerDir: join(options.dataDir, 'openclaw'),
     logger,
   });
+  cleanups.push(() => provider.stop());
   provider.start();
 
   const token = readSecretFile(tokenFile);
@@ -83,6 +102,9 @@ export function registerTradingProvider(options: RegisterTradingProviderOptions)
   });
 
   let stopped = false;
+  cleanups.push(() => {
+    stopped = true;
+  });
   // Snapshot inicial antes dos eventos incrementais; o SSE reenvia um snapshot a cada conexão.
   void client
     .getAgents()
@@ -96,6 +118,8 @@ export function registerTradingProvider(options: RegisterTradingProviderOptions)
 
   const ticker = setInterval(() => processor.tick(), 1000);
   ticker.unref();
+  cleanups.push(() => clearInterval(ticker));
+  cleanups.push(() => stream.stop());
   logger.info(`[trading] Trading Room ativa: 7 agentes, receptor ${baseUrl}`);
 
   return {

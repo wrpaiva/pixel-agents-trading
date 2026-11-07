@@ -87,4 +87,15 @@ describe('registerTradingProvider', () => {
     expect(warnings.some((w) => w.includes('token'))).toBe(true);
     expect(warnings.join(' ')).not.toContain(TOKEN);
   });
+
+  it('falha ao compor no boot: não lança, avisa "desativada" e stop() resolve', async () => {
+    writeFileSync(join(dir, 'openclaw'), 'arquivo, não diretório');
+    let result: TradingRoomHandle | undefined;
+    expect(() => {
+      result = registerTradingProvider({ store, addReplayer: addActivityReplayer, dataDir: dir, env: { PIXEL_EVENTS_TOKEN_FILE: join(dir, 'token') }, logger });
+    }).not.toThrow();
+    expect(warnings.some((w) => w.includes('desativada'))).toBe(true);
+    expect(warnings.join(' ')).not.toContain(TOKEN);
+    await expect(result!.stop()).resolves.toBeUndefined();
+  });
 });
