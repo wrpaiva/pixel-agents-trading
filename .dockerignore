@@ -1,0 +1,9 @@
+.git
+node_modules
+vendor/pixel-agents/node_modules
+vendor/pixel-agents/webview-ui/node_modules
+vendor/pixel-agents/server/node_modules
+vendor/pixel-agents/dist
+test-results
+playwright-report
+trading-room
