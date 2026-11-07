@@ -1,0 +1,22 @@
+{
+  "name": "pixel-agents-trading",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "test": "vitest run",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
+    "typecheck": "tsc --noEmit",
+    "build:vendor": "cd vendor/pixel-agents && npm ci --ignore-scripts && node esbuild.js --production && npm run build:webview",
+    "e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "@types/node": "22.x",
+    "@types/vscode": "^1.105.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.10"
+  }
+}
