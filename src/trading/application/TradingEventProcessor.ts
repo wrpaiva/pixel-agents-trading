@@ -66,8 +66,10 @@ export class TradingEventProcessor {
         this.logger.warn(`[trading] snapshot ignorado: agente desconhecido "${snap.agentId}"`);
         continue;
       }
-      const status = this.mapper.fromReceiverState(snap.receiverState);
+      let status = this.mapper.fromReceiverState(snap.receiverState);
       const lastTs = snap.lastSeen ? Date.parse(snap.lastSeen) : NaN;
+      // Sem lastSeen válido não há evidência de atividade: estado ativo vira idle.
+      if (ACTIVE_STATUSES.has(status) && Number.isNaN(lastTs)) status = 'idle';
       const track = this.track(snap.agentId);
       track.lastSeq = snap.seq;
       track.lastTs = Number.isNaN(lastTs) ? null : lastTs;
@@ -166,6 +168,12 @@ export class TradingEventProcessor {
     const next = this.registry.update(agentId, patch);
     if (next.status !== previous.status) this.track(agentId).statusSince = this.clock.now();
     if (next.status === previous.status && next.toolName === previous.toolName) return;
-    for (const listener of this.listeners) listener(next, previous);
+    for (const listener of this.listeners) {
+      try {
+        listener(next, previous);
+      } catch (err) {
+        this.logger.warn(`[trading] listener falhou: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
   }
 }

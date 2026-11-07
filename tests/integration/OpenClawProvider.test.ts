@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -47,6 +47,27 @@ beforeEach(() => {
 afterEach(() => {
   provider.stop();
   rmSync(dir, { recursive: true, force: true });
+});
+
+describe('OpenClawProvider (falhas)', () => {
+  it('start parcial não deixa personagens órfãos no store', () => {
+    store.set(9004, createAgentState({ id: 9004, sessionId: 'outro', providerId: 'claude', projectDir: 'x', jsonlFile: 'x' } as never));
+    expect(() => provider.start()).toThrow(/9004/);
+    for (const id of [9001, 9002, 9003]) expect(store.has(id)).toBe(false);
+    expect(store.has(9004)).toBe(true);
+  });
+
+  it('falha ao recriar personagem removido não escapa e avisa', async () => {
+    const warns: string[] = [];
+    provider = new OpenClawProvider({ store, registry, processor, addReplayer: addActivityReplayer, markerDir: dir, logger: { info: () => {}, warn: (m) => warns.push(m) } });
+    provider.start();
+    rmSync(dir, { recursive: true, force: true });
+    writeFileSync(dir, 'arquivo');
+    store.delete(9001);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(warns.some((w) => w.includes('falha ao recriar'))).toBe(true);
+    expect(store.has(9001)).toBe(false);
+  });
 });
 
 describe('OpenClawProvider', () => {

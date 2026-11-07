@@ -12,7 +12,7 @@ import type { TradingAgentDefinition } from '../config/agents.js';
 import type { AgentStatus } from '../domain/AgentStatus.js';
 import type { TradingAgent } from '../domain/TradingAgent.js';
 
-export type OfficeStore = Pick<AgentStateStore, 'has' | 'get' | 'set' | 'broadcast' | 'persist' | 'on' | 'off'>;
+export type OfficeStore = Pick<AgentStateStore, 'has' | 'get' | 'set' | 'delete' | 'broadcast' | 'persist' | 'on' | 'off'>;
 export type AddReplayer = (replay: (send: ReplaySend) => void) => () => void;
 
 export const OPENCLAW_PROVIDER_ID = 'openclaw';
@@ -66,7 +66,14 @@ export class OpenClawProvider {
 
   start(): void {
     if (this.unsubscribe) return;
-    for (const def of this.options.registry.definitions()) this.ensureAgent(def);
+    const created: number[] = [];
+    try {
+      for (const def of this.options.registry.definitions()) if (this.ensureAgent(def)) created.push(def.officeId);
+    } catch (err) {
+      // Start parcial não deixa personagens órfãos no store.
+      for (const id of created) this.options.store.delete(id);
+      throw err;
+    }
     this.options.store.persist();
     this.unsubscribe = this.options.processor.subscribe((agent) => this.render(agent));
     this.removeReplayer = this.options.addReplayer((send) => this.replay(send));
@@ -82,14 +89,15 @@ export class OpenClawProvider {
     this.removeReplayer = null;
   }
 
-  private ensureAgent(def: TradingAgentDefinition): void {
+  /** Devolve true se criou o personagem agora. */
+  private ensureAgent(def: TradingAgentDefinition): boolean {
     const { store, markerDir } = this.options;
     const existing = store.get(def.officeId);
     if (existing) {
       if (existing.providerId !== OPENCLAW_PROVIDER_ID) {
         throw new Error(`[trading] id ${def.officeId} reservado para ${def.agentId} já está em uso por outro agente`);
       }
-      return;
+      return false;
     }
     // Agentes externos sem arquivo de transcript são removidos pela checagem "stale"
     // do upstream; um marcador vazio mantém o personagem vivo. Nada é escrito nele.
@@ -112,6 +120,7 @@ export class OpenClawProvider {
         hueShift: def.hueShift,
       }),
     );
+    return true;
   }
 
   private render(agent: TradingAgent): void {
@@ -159,11 +168,15 @@ export class OpenClawProvider {
     this.logger.warn(`[trading] personagem ${def.agentId} removido; recriando`);
     // Fora do fluxo de remoção do runtime, que ainda está em andamento.
     setImmediate(() => {
-      if (!this.unsubscribe || this.options.store.has(id)) return;
-      this.ensureAgent(def);
-      this.options.store.broadcast({ type: 'agentTeamInfo', id, agentName: def.displayName });
-      this.render(this.options.registry.get(def.agentId)!);
-      this.options.store.persist();
+      try {
+        if (!this.unsubscribe || this.options.store.has(id)) return;
+        this.ensureAgent(def);
+        this.options.store.broadcast({ type: 'agentTeamInfo', id, agentName: def.displayName });
+        this.render(this.options.registry.get(def.agentId)!);
+        this.options.store.persist();
+      } catch (err) {
+        this.logger.warn(`[trading] falha ao recriar ${def.agentId}: ${err instanceof Error ? err.message : String(err)}`);
+      }
     });
   };
 }

@@ -65,6 +65,31 @@ describe('snapshot inicial (resposta real do receptor)', () => {
   });
 });
 
+describe('snapshot ativo sem evidência de atividade', () => {
+  it.each([null, 'lixo'])('lastSeen %s com estado ativo vira idle', (lastSeen) => {
+    processor.applySnapshot([{ ...realSnapshot()[1]!, receiverState: 'analisando', lastSeen }]);
+    expect(status('crypto-btc')).toBe('idle');
+  });
+});
+
+describe('falha de listener', () => {
+  it('não propaga, os demais listeners rodam e avisa', () => {
+    const second: string[] = [];
+    processor.subscribe(() => {
+      throw new Error('boom');
+    });
+    processor.subscribe((a) => second.push(a.status));
+    processor.applySnapshot(realSnapshot());
+    expect(() => processor.applyEvent(event('model_start'))).not.toThrow();
+    expect(second).toContain('analyzing');
+    expect(() => processor.markDisconnected()).not.toThrow();
+    now += 200_000;
+    expect(() => processor.tick()).not.toThrow();
+    expect(second).toContain('disconnected');
+    expect(warnings.some((w) => w.includes('listener falhou: boom'))).toBe(true);
+  });
+});
+
 describe('eventos de execução', () => {
   beforeEach(() => {
     processor.applySnapshot(realSnapshot());

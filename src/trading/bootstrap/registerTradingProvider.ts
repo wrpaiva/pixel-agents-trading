@@ -96,7 +96,13 @@ function compose(options: RegisterTradingProviderOptions, logger: Logger, cleanu
       onEvent: (event) => processor.applyEvent(event),
       onConnectionLost: (reason) => {
         logger.warn(`[trading] conexão com o receptor perdida: ${reason}`);
-        disconnectTimer ??= setTimeout(() => processor.markDisconnected(), disconnectAfterMs);
+        disconnectTimer ??= setTimeout(() => {
+          try {
+            processor.markDisconnected();
+          } catch (err) {
+            logger.warn(`[trading] falha ao marcar desconectado: ${err instanceof Error ? err.message : String(err)}`);
+          }
+        }, disconnectAfterMs);
       },
     },
   });
@@ -116,7 +122,13 @@ function compose(options: RegisterTradingProviderOptions, logger: Logger, cleanu
       if (!stopped) stream.start();
     });
 
-  const ticker = setInterval(() => processor.tick(), 1000);
+  const ticker = setInterval(() => {
+    try {
+      processor.tick();
+    } catch (err) {
+      logger.warn(`[trading] falha no relógio de expiração: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }, 1000);
   ticker.unref();
   cleanups.push(() => clearInterval(ticker));
   cleanups.push(() => stream.stop());
