@@ -1,3 +1,6 @@
+import http from 'node:http';
+import type { AddressInfo } from 'node:net';
+
 import { afterEach, describe, expect, it } from 'vitest';
 
 import type { TradingAgentEvent } from '../../src/trading/domain/TradingAgentEvent.js';
@@ -11,10 +14,16 @@ const TOKEN = 'test-test-test-test-test-test-12345678';
 const quiet = { info: () => {}, warn: () => {} };
 let fake: FakeReceiver | undefined;
 let stream: ReceiverEventStream | undefined;
+let silent: http.Server | undefined;
 
 afterEach(async () => {
   await stream?.stop();
   await fake?.close();
+  if (silent) {
+    silent.closeAllConnections();
+    await new Promise((resolve) => silent!.close(resolve));
+  }
+  silent = undefined;
   stream = fake = undefined;
 });
 
@@ -86,5 +95,27 @@ describe('ReceiverEventStream', () => {
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(c.lost).toEqual([]);
     expect(fake.clientCount).toBe(0);
+  });
+
+  it('handler onConnectionLost que lança não derruba o loop de reconexão', async () => {
+    fake = await startFakeReceiver({ token: TOKEN });
+    const c = collect();
+    const handlers = { ...c.handlers, onConnectionLost: () => { throw new Error('boom'); } };
+    stream = new ReceiverEventStream({ client: new ReceiverApiClient({ baseUrl: fake.url, token: TOKEN }), handlers, logger: quiet, initialBackoffMs: 10 });
+    stream.start();
+    await waitFor(() => c.snapshots.length === 1);
+    fake.dropClients();
+    await waitFor(() => c.snapshots.length === 2);
+  });
+
+  it('servidor que aceita a conexão mas nunca responde é abortado pelo idle timeout', async () => {
+    silent = http.createServer(() => {});
+    await new Promise<void>((resolve) => silent!.listen(0, '127.0.0.1', resolve));
+    const url = `http://127.0.0.1:${(silent.address() as AddressInfo).port}`;
+    const c = collect();
+    stream = new ReceiverEventStream({ client: new ReceiverApiClient({ baseUrl: url, token: TOKEN }), handlers: c.handlers, logger: quiet, initialBackoffMs: 10, idleTimeoutMs: 100 });
+    stream.start();
+    await waitFor(() => c.lost.length >= 1);
+    expect(c.lost[0]).toMatch(/sem dados/);
   });
 });

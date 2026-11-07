@@ -98,7 +98,11 @@ export class ReceiverEventStream {
         backoff = this.initialBackoffMs;
       });
       if (this.stopped) break;
-      this.options.handlers.onConnectionLost(reason);
+      try {
+        this.options.handlers.onConnectionLost(reason);
+      } catch (err) {
+        this.logger.warn(`[trading] handler onConnectionLost falhou: ${err instanceof Error ? err.message : String(err)}`);
+      }
       await this.sleep(backoff);
       backoff = Math.min(backoff * 2, this.maxBackoffMs);
     }
@@ -108,6 +112,7 @@ export class ReceiverEventStream {
     const controller = new AbortController();
     this.controller = controller;
     try {
+      this.armIdle(controller);
       const res = await this.options.client.openEvents(controller.signal);
       if (!res.ok || !res.body) {
         await res.body?.cancel();
@@ -115,7 +120,6 @@ export class ReceiverEventStream {
       }
       const parser = new SseParser();
       const decoder = new TextDecoder();
-      this.armIdle(controller);
       for await (const chunk of res.body) {
         this.armIdle(controller);
         for (const message of parser.push(decoder.decode(chunk, { stream: true }))) this.dispatch(message, onHealthy);
