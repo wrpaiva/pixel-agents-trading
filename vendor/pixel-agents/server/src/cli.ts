@@ -261,6 +261,7 @@ async function main(): Promise<void> {
       store,
       addReplayer: addActivityReplayer,
       dataDir: path.join(os.homedir(), '.pixel-agents'),
+      seats: adapter,
     });
 
     // onSetHooksEnabled side effect: install/uninstall the named provider's

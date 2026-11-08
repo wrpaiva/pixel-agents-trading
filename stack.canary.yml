@@ -1,10 +1,10 @@
 version: "3.8"
 
-# Validação da 2.0.0 contra o receptor real ANTES de trocar a produção.
+# Validação de uma nova versão contra o receptor real ANTES de trocar a produção.
 # Sem Traefik e sem porta: acesso só via `docker exec ... smoke-ws.mjs`.
 services:
   web:
-    image: ghcr.io/wrpaiva/pixel-agents-trading:2.0.0
+    image: ghcr.io/wrpaiva/pixel-agents-trading:2.1.0
     environment:
       NODE_ENV: production
       HOME: /home/node

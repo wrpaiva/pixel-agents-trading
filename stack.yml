@@ -3,7 +3,7 @@ version: "3.8"
 services:
   web:
     # Rollback: PIXEL_AGENTS_TAG=1.0.0 (ou o digest anotado em docs/deployment.md).
-    image: ghcr.io/wrpaiva/pixel-agents-trading:${PIXEL_AGENTS_TAG:-2.0.0}
+    image: ghcr.io/wrpaiva/pixel-agents-trading:${PIXEL_AGENTS_TAG:-2.1.0}
 
     environment:
       NODE_ENV: production

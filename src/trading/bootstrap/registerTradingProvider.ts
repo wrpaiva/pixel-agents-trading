@@ -6,13 +6,15 @@ import { TradingEventProcessor } from '../application/TradingEventProcessor.js';
 import { ReceiverApiClient } from '../infrastructure/ReceiverApiClient.js';
 import { ReceiverEventStream } from '../infrastructure/ReceiverEventStream.js';
 import { readSecretFile } from '../infrastructure/SecretProvider.js';
-import { type AddReplayer, type OfficeStore, OpenClawProvider } from '../providers/OpenClawProvider.js';
+import { type AddReplayer, type OfficeStore, OpenClawProvider, type SeatStore } from '../providers/OpenClawProvider.js';
 
 export interface RegisterTradingProviderOptions {
   store: OfficeStore;
   addReplayer: AddReplayer;
   /** ~/.pixel-agents — os marcadores ficam em <dataDir>/openclaw. */
   dataDir: string;
+  /** Estado do upstream onde ficam as cadeiras fixas de cada agente. */
+  seats?: SeatStore;
   env?: NodeJS.ProcessEnv;
   logger?: Logger;
 }
@@ -67,6 +69,7 @@ function compose(options: RegisterTradingProviderOptions, logger: Logger, cleanu
     processor,
     addReplayer: options.addReplayer,
     markerDir: join(options.dataDir, 'openclaw'),
+    seats: options.seats,
     logger,
   });
   cleanups.push(() => provider.stop());

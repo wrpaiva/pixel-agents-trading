@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import type { ReplaySend } from '../../../vendor/pixel-agents/server/src/activityReplayers.js';
 import { createAgentState } from '../../../vendor/pixel-agents/server/src/agentState.js';
 import type { AgentStateStore } from '../../../vendor/pixel-agents/server/src/agentStateStore.js';
+import type { FileStateAdapter } from '../../../vendor/pixel-agents/server/src/fileStateAdapter.js';
 import type { AgentState } from '../../../vendor/pixel-agents/server/src/types.js';
 import { consoleLogger, type Logger } from '../application/ports.js';
 import type { TradingAgentRegistry } from '../application/TradingAgentRegistry.js';
@@ -14,6 +15,8 @@ import type { TradingAgent } from '../domain/TradingAgent.js';
 
 export type OfficeStore = Pick<AgentStateStore, 'has' | 'get' | 'set' | 'delete' | 'broadcast' | 'persist' | 'on' | 'off'>;
 export type AddReplayer = (replay: (send: ReplaySend) => void) => () => void;
+/** Cadeiras persistidas pelo upstream; o handshake as envia como agentMeta.seatId. */
+export type SeatStore = Pick<FileStateAdapter, 'loadSeats' | 'saveSeats'>;
 
 export const OPENCLAW_PROVIDER_ID = 'openclaw';
 /** Uma única "ferramenta" sintética por agente carrega o rótulo da atividade. */
@@ -47,6 +50,8 @@ export interface OpenClawProviderOptions {
   addReplayer: AddReplayer;
   /** Diretório dos arquivos-marcador (um .jsonl vazio por agente). */
   markerDir: string;
+  /** Opcional: sem ele, o webview escolhe cadeiras livres. */
+  seats?: SeatStore;
   logger?: Logger;
 }
 
@@ -75,6 +80,7 @@ export class OpenClawProvider {
       throw err;
     }
     this.options.store.persist();
+    this.assignSeats();
     this.unsubscribe = this.options.processor.subscribe((agent) => this.render(agent));
     this.removeReplayer = this.options.addReplayer((send) => this.replay(send));
     this.options.store.on('agentRemoved', this.onAgentRemoved);
@@ -87,6 +93,31 @@ export class OpenClawProvider {
     this.options.store.off('agentRemoved', this.onAgentRemoved);
     this.unsubscribe = null;
     this.removeReplayer = null;
+  }
+
+  /**
+   * Fixa cada agente no banco da sua estação. Regravado a cada início porque um
+   * navegador privilegiado salva as cadeiras que escolheu quando o layout não as tem.
+   */
+  private assignSeats(): void {
+    const { seats } = this.options;
+    if (!seats) return;
+    try {
+      const current = seats.loadSeats();
+      const next = { ...current };
+      let changed = false;
+      for (const def of this.options.registry.definitions()) {
+        const key = String(def.officeId);
+        const prev = current[key];
+        if (prev?.seatId === def.seatId && prev.palette === def.palette && prev.hueShift === def.hueShift) continue;
+        next[key] = { palette: def.palette, hueShift: def.hueShift, seatId: def.seatId };
+        changed = true;
+      }
+      if (changed) seats.saveSeats(next);
+    } catch (err) {
+      // Sem cadeira fixa o escritório continua funcionando; só a posição fica a cargo do webview.
+      this.logger.warn(`[trading] falha ao fixar cadeiras: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
   /** Devolve true se criou o personagem agora. */

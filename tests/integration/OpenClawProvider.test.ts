@@ -160,3 +160,50 @@ describe('OpenClawProvider', () => {
     expect(handshake().filter((m) => m.type === 'agentStatus')).toEqual([]);
   });
 });
+
+describe('OpenClawProvider (cadeiras)', () => {
+  type Seats = Record<string, { palette?: number; hueShift?: number; seatId?: string }>;
+  const seatStore = (initial: Seats = {}) => {
+    const box = { seats: { ...initial }, saves: 0 };
+    return { box, store: { loadSeats: () => box.seats, saveSeats: (s: Seats) => ((box.seats = s), box.saves++) } };
+  };
+  const make = (seats: ReturnType<typeof seatStore>['store']) =>
+    new OpenClawProvider({ store, registry, processor, addReplayer: addActivityReplayer, markerDir: dir, seats, logger: quiet });
+
+  it('fixa cada agente no banco da sua estação sem apagar cadeiras de outros agentes', () => {
+    const { box, store: seats } = seatStore({ '1': { palette: 2, hueShift: 0, seatId: 'meeting-chair-1' } });
+    provider.stop();
+    provider = make(seats);
+    provider.start();
+    expect(box.seats['9002']).toEqual({ palette: 1, hueShift: 0, seatId: 'seat-crypto-btc' });
+    expect(box.seats['9001']?.seatId).toBe('seat-trading-coordinator');
+    expect(box.seats['1']?.seatId).toBe('meeting-chair-1');
+    expect(Object.keys(box.seats)).toHaveLength(8);
+  });
+
+  it('corrige cadeira trocada pelo navegador e não regrava quando já está certo', () => {
+    const { box, store: seats } = seatStore({ '9002': { palette: 1, hueShift: 0, seatId: 'meeting-chair-2' } });
+    provider.stop();
+    provider = make(seats);
+    provider.start();
+    expect(box.seats['9002']?.seatId).toBe('seat-crypto-btc');
+    expect(box.saves).toBe(1);
+    provider.stop();
+    provider = make(seats);
+    provider.start();
+    expect(box.saves).toBe(1);
+  });
+
+  it('falha ao gravar cadeiras só avisa; os personagens continuam', () => {
+    const warns: string[] = [];
+    provider.stop();
+    provider = new OpenClawProvider({
+      store, registry, processor, addReplayer: addActivityReplayer, markerDir: dir,
+      seats: { loadSeats: () => ({}), saveSeats: () => { throw new Error('disco cheio'); } },
+      logger: { info: () => {}, warn: (m) => warns.push(m) },
+    });
+    provider.start();
+    expect(warns.join()).toMatch(/falha ao fixar cadeiras: disco cheio/);
+    expect(store.has(9002)).toBe(true);
+  });
+});
