@@ -6,3 +6,6 @@ vendor/pixel-agents/dist/
 test-results/
 playwright-report/
 *.tgz
+
+# Imagens de referência locais (capturas de anúncios), fora do repositório
+imagem/
